@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sprites image='sprites/anime.png'>
+	<sprite name='person1' rows='4' columns='3'>
+		<bounds width='{$image.width / 4}' height='{$image.height / 2}'
+			x='{$index * $width}' y='{$index * $height}' />
+		<animations>
+			<animation name='goRight'>
+				<step row='2' column='1' />
+				<step row='2' column='2' />
+				<step row='2' column='3' />
+			</animation>
+			<animation name='goLeft'>
+				<step row='4' column='1' />
+				<step row='4' column='2' />
+				<step row='4' column='3' />
+			</animation>
+			<animation name='goUp'>
+				<step row='1' column='1' />
+				<step row='1' column='2' />
+				<step row='1' column='3' />
+			</animation>
+			<animation name='goDown'>
+				<step row='3' column='1' />
+				<step row='3' column='2' default='true' />
+				<step row='3' column='3' />
+			</animation>
+		</animations>
+	</sprite>
+	<sprite name='person2' rows='4' columns='3'>
+		<bounds width='{$image.width / 4}' height='{$image.height / 2}'
+			x='{$index * $width}' y='{$index * $height}' />
+		<animations>
+			<animation name='goRight'>
+				<step row='2' column='1' />
+				<step row='2' column='2' />
+				<step row='2' column='3' />
+			</animation>
+			<animation name='goLeft'>
+				<step row='4' column='1' />
+				<step row='4' column='2' />
+				<step row='4' column='3' />
+			</animation>
+			<animation name='goUp'>
+				<step row='1' column='1' />
+				<step row='1' column='2' default='true' />
+				<step row='1' column='3' />
+			</animation>
+			<animation name='goDown'>
+				<step row='3' column='1' />
+				<step row='3' column='2' />
+				<step row='3' column='3' />
+			</animation>
+		</animations>
+	</sprite>
+	<sprite name='person3' rows='4' columns='3'>
+		<bounds width='{$image.width / 4}' height='{$image.height / 2}'
+			x='{($index -2) * $width}' y='{($index - 1)* $height}' />
+		<animations>
+			<animation name='goRight'>
+				<step row='2' column='1' />
+				<step row='2' column='2' />
+				<step row='2' column='3' />
+			</animation>
+			<animation name='goLeft'>
+				<step row='4' column='1' />
+				<step row='4' column='2' />
+				<step row='4' column='3' />
+			</animation>
+			<animation name='goUp'>
+				<step row='1' column='1' />
+				<step row='1' column='2' />
+				<step row='1' column='3' />
+			</animation>
+			<animation name='goDown'>
+				<step row='3' column='1' />
+				<step row='3' column='2' default='true' />
+				<step row='3' column='3' />
+			</animation>
+		</animations>
+	</sprite>
+	<sprite name='person4' rows='4' columns='3'>
+		<bounds width='{$image.width / 4}' height='{$image.height / 2}'
+			x='{($index -2)* $width}' y='{($index - 1)* $height}' />
+		<animations>
+			<animation name='goRight'>
+				<step row='2' column='1' />
+				<step row='2' column='2' />
+				<step row='2' column='3' />
+			</animation>
+			<animation name='goLeft'>
+				<step row='4' column='1' />
+				<step row='4' column='2' />
+				<step row='4' column='3' />
+			</animation>
+			<animation name='goUp'>
+				<step row='1' column='1' />
+				<step row='1' column='2' />
+				<step row='1' column='3' />
+			</animation>
+			<animation name='goDown'>
+				<step row='3' column='1' />
+				<step row='3' column='2' default='true' />
+				<step row='3' column='3' />
+			</animation>
+		</animations>
+	</sprite>
+</sprites>

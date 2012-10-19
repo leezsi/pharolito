@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<game>
+	<sprites>{PHAROLITO_SPRITE_IMAGE_REPOSITORY + 'anime.xml'}</sprites>
+	<!-- <images> -->
+	<!-- <image></image> -->
+	<!-- </images> -->
+	<config>
+		<transparentColor r='32' g='156' b='0' />
+	</config>
+</game>
