@@ -62,6 +62,13 @@ Function.prototype.test = function(regexp) {
 function i(obj) {
 	console.info(obj);
 }
+
+function t(element, name) {
+	return element.getElementsByTagName(name)[0];
+}
+function td(element, name) {
+	return t(element, name).firstChild.data;
+};
 Function.prototype.empty = function() {
 	return function() {
 	};
@@ -263,6 +270,52 @@ var Class = new (function() {
 	};
 })();
 // ------------------------------------VIEW---------------------------------------------
+
+function createViewPort(configs) {
+	if (!configs) {
+		throw 'viewport configs needed';
+	}
+	ViewPort = new (function() {
+		var howMuchLayers = td(configs, 'layers').toInt();
+		this.layers = [];
+		var width = t(configs, 'bounds').getAttribute('width').toInt();
+		var height = t(configs, 'bounds').getAttribute('height').toInt();
+		function createCanvas(width, height) {
+			var canvas = document.createElement('canvas');
+			canvas.width = width;
+			canvas.height = height;
+			return canvas;
+		}
+		function getContext(width, height) {
+			return createCanvas(width, height).getContext('2d');
+		}
+		var main = createCanvas(width, height);
+		this.canvas = main.getContext('2d');
+		
+		for ( var index = 1; index <= howMuchLayers; index++) {
+			this.layers.push(getContext(width, height));
+		}
+		document.getElementById(td(configs, 'holder')).appendChild(main);
+
+		this.clean = function() {
+			this.canvas.clearRect(0, 0, width, height);
+			for ( var index = 0; index < howMuchLayers; index++) {
+				this.layers[index].clearRect(0, 0, width, height);
+			}
+		};
+
+		this.marge = function() {
+			for ( var index = 0; index < howMuchLayers; index++) {
+				this.canvas.drawImage(this.layers[index].canvas,0,0);
+			}
+		};
+		
+		this.draw=function(obj,level){
+			obj.draw(this.layers[level]);
+		};
+	});
+}
+
 ImageStore = new (function() {
 	var images = {};
 	var waiting = {};
@@ -319,12 +372,11 @@ SpriteRepository = new (function() {
 		var root = xml.firstChild;
 		var imageName = root.getAttribute('image').toURI();
 		var image = ImageStore.get(imageName.name);
-		var xmlSprites = root.getElementsByTagName('sprite');
+		var xmlSprites = t(root, 'sprite');
 		for ( var index = 0; index < xmlSprites.length; index++) {
 			var currentSpriteData = xmlSprites[index];
-			var bounds = currentSpriteData.getElementsByTagName('bounds')[0];
-			var animations = currentSpriteData
-					.getElementsByTagName('animations')[0];
+			var bounds = t(currentSpriteData, 'bounds');
+			var animations = t(currentSpriteData, 'animations');
 			var name = currentSpriteData.getAttribute('name');
 			var rows = currentSpriteData.getAttribute('rows');
 			var columns = currentSpriteData.getAttribute('columns');
@@ -337,6 +389,9 @@ SpriteRepository = new (function() {
 	};
 	this.findByName = function(name) {
 		return sprites[name];
+	};
+	this.register = function(name, sprite) {
+		sprites[name] = sprite;
 	};
 });
 
@@ -424,13 +479,26 @@ function Sprite(image, rows, columns, bounds, animations, index) {
 	this.d = function() {
 		return toDraw;
 	};
+	this.clone = function(spriteId) {
+		var clone = new Sprite(image, rows, columns, bounds, animations,
+				this.index);
+		SpriteRepository.register(spriteId, clone);
+		return clone;
+	};
+}
+
+function Tile() {
+	var objects = [];
+	this.contains = function(obj) {
+		return objects.indexOf(obj) > -1;
+	};
 }
 
 // ------------------------------------MODELING----------------------------------------
 
 ModelObject = Class.create(ProtoObjectClass, {
-	initialize : function(spriteID) {
-		this.sprite = SpriteRepository.findByName(spriteID);
+	initialize : function(view) {
+		this.view = view;
 		this.internalInitialize();
 	},
 	internalInitialize : function() {
@@ -441,23 +509,30 @@ ModelObject = Class.create(ProtoObjectClass, {
 
 	},
 	draw : function(ctx) {
-		this.sprite.draw(ctx, this.x, this.y);
+		this.view.draw(ctx, this.x, this.y);
 	}
 });
 
 // -------------------------------------CORE-------------------------------------------
+
+Ph = new (function() {
+	var objects = [];
+});
+
+// --------------------------------------LOADING----------------------------------------
 function pharolitoConfigs(url) {
 	new Ajax().success(function($xml) {
 		var root = $xml.firstChild;
 		loadSprits(root);
-		var configs = root.getElementsByTagName('config')[0];
+		var configs = t(root, 'config');
 		if (configs) {
 			loadTransparentColor(configs);
+			createViewPort(t(configs, 'viewport'));
 		}
 	}).get(url);
 }
 function loadTransparentColor(configs) {
-	var transparentColor = configs.getElementsByTagName('transparentColor')[0];
+	var transparentColor = t(configs, 'transparentColor');
 	if (transparentColor) {
 		TRANSPARENT_PIXEL_COLOR['r'] = transparentColor.getAttribute('r')
 				.toInt()
@@ -471,7 +546,7 @@ function loadTransparentColor(configs) {
 	}
 }
 function loadSprits(root) {
-	var sprites = root.getElementsByTagName('sprites')[0];
+	var sprites = t(root, 'sprites');
 	if (sprites) {
 		var toEval = sprites.firstChild.data;
 		toEval = toEval.selfTemplate(/\{.*\}/g);

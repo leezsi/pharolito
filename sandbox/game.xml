@@ -6,7 +6,11 @@
 	<!-- <image></image> -->
 	<!-- </images> -->
 	<config>
-		<holder id='gameHolder' />
+		<viewport>
+			<holder>gameHolder</holder>
+			<bounds width='500' height='500' />
+			<layers> 4</layers>
+		</viewport>
 		<transparentColor r='32' g='156' b='0' />
 	</config>
 	<modules>
