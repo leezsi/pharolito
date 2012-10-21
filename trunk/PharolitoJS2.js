@@ -1,11 +1,26 @@
 var PHAROLITO_RELATIVE = '../trunk/';
 var DEFAULT_SPRITE_IMAGE_REPOSITORY = 'sprites/';
+DEFAULT_GAME_REPOSITORY = 'gameInfo/';
 var TRANSPARENT_PIXEL_COLOR = {
 	r : 32,
 	g : 156,
 	b : 0
 };
+var getRequestAnimationFrame = function() {
+	return window.requestAnimationFrame || window.webkitRequestAnimationFrame
+			|| window.mozRequestAnimationFrame || window.oRequestAnimationFrame
+			|| window.msRequestAnimationFrame || function(callback) {
+				window.setTimeout(enroute, 1 / 60 * 1000);
+			};
+};
 // ---------------------------------------BASIC_TYPES----------------------------------
+
+Array.prototype.each = function(fn) {
+	for ( var i = 0; i < this.length; i++) {
+		var c = this[i];
+		fn.call(c, i, this);
+	}
+};
 String.prototype.selfTemplate = function(regExp) {
 	if (this.test(regExp)) {
 		return this.substring(1, this.length - 1).replace(/\$/g, "self.");
@@ -41,6 +56,14 @@ String.prototype.rTrim = function() {
 String.prototype.bTrim = function() {
 	return this.replace(/\s/g, '');
 };
+function URI(uri) {
+	this.uri = uri;
+	this.parts = uri.split('/');
+	var tmp = this.parts[this.parts.length - 1].split('.');
+	this.name = tmp[0];
+	this.domain = tmp[1];
+}
+
 String.prototype.toURI = function() {
 	return new URI(this);
 };
@@ -76,6 +99,8 @@ Function.prototype.empty = function() {
 Function.prototype.params = function() {
 	var toParse = this.toString().match(
 			new RegExp("\\([\\w\\,\\$\\s]*\\)", "g")).shift();
+	// (?:\\()
+	// (?:\))
 	return (toParse.substring(1, toParse.length - 1)).bTrim().split(',');
 };
 
@@ -116,20 +141,28 @@ function wrapperSuperFunction(thisObj, superObj, callback) {
 function Ajax() {
 	var factory = function() {
 		return (window.XMLHttpRequest || new ActiveXObject("Microsoft.XMLHTTP"));
-	}.promise();
-	var request = new factory();
-	var $success = $execute = $errors = undefined;
+	};
+	var request = new (factory())();
+	var $success = $execute = $error = undefined;
 	var self = this;
 	function config() {
 		request.onreadystatechange = function() {
 			if (this.readyState == 4) {
 				if (this.status == 200) {
-					($execute || $success || Function.empty())
-							.invokeSellecting({
-								$text : request.responseText,
-								$xml : request.responseXML,
-								$self : self
-							});
+					if ($success)
+						$success.invokeSellecting({
+							$text : request.responseText,
+							$xml : request.responseXML,
+							$self : self
+						});
+					else if ($execute)
+						$execute(request.responseText);
+					else
+						$error.invokeSellecting({
+							$text : 'Not execute or success',
+							$code : -1,
+							$self : self
+						});
 				} else {
 					($error || Function.empty()).invokeSellecting({
 						$text : request.statusText,
@@ -214,59 +247,63 @@ HTMLInputElement.prototype.serialize = function() {
 };
 // -------------------------------------------------------------------------
 
-function URI(uri) {
-	this.uri = uri;
-	this.parts = uri.split('/');
-	var tmp = this.parts[this.parts.length - 1].split('.');
-	this.name = tmp[0];
-	this.domain = tmp[1];
-}
-
-function contextulizedFunction(callback) {
-	return function() {
-		var args = $S(arguments);
-		return callback.apply(args.shift(), args);
-	};
-}
-
-function SuperObject(thisObject, proto) {
-	this.thisObj = thisObject;
-	this.proto = proto;
-	for ( var prop in proto) {
-		if (prop !== 'toString')
-			this[prop] = contextulizedFunction(proto[prop]);
-	}
-}
-function ProtoObjectClass() {
-	this.initialize = function() {
+/*
+ * Inspired by Simple JavaScript Inheritance By John Resig http://ejohn.org/ MIT
+ * Licensed.
+ */
+(function() {
+	// The base Class implementation (does nothing)
+	this.Class = function() {
 	};
 
-};
+	// Create a new Class that inherits from this class
+	Class.extend = function(prop) {
+		var _super = this.prototype;
 
-var Class = new (function() {
-	this.addMethods = function(thisObject, superObject, bundle) {
-		for ( var prop in bundle) {
-			var tmp = bundle[prop];
-			if (!thisObject[prop]) {
-				thisObject[prop] = tmp;
-			} else {
-				thisObject[prop] = wrapperSuperFunction(thisObject,
-						superObject, tmp);
-			}
+		// Instantiate a base class (but only create the instance,
+		// don't run the init constructor)
+		initializing = true;
+		var prototype = new this();
+		initializing = false;
+
+		// Copy the properties over onto the new prototype
+		for ( var name in prop) {
+			// Check if we're overwriting an existing function
+			prototype[name] = typeof prop[name] == "function"
+					&& typeof _super[name] == "function"
+					&& prop[name].params().shift() == '$super' ? (function(
+					name, fn) {
+				return function() {
+					// The method only need to be bound temporarily, so we
+					// remove it when we're done executing
+					var self = this;
+					var args = arguments;
+					function s() {
+						return _super[name].apply(self, args);
+					}
+					var ret = fn.apply(this, [ s ].concat(arguments));
+					return ret;
+				};
+			})(name, prop[name]) : prop[name];
 		}
-	};
-	this.create = function(superclass, subclassBehaviour) {
-		var proto = new superclass;
-		var subclass = function() {
-			this.superclass = superclass;
-			var superObj = new SuperObject(this, proto);
-			Class.addMethods(this, superObj, subclassBehaviour);
-			this.initialize.apply(this, $S(arguments));
-		};
-		subclass.prototype = proto;
-		subclass.$class = subclass;
-		subclass.prototype.constructor = subclass;
-		return subclass;
+
+		// The dummy class constructor
+		function Class() {
+			// All construction is actually done in the init method
+			if (!initializing && this.init)
+				this.init.apply(this, arguments);
+		}
+
+		// Populate our constructed prototype object
+		Class.prototype = prototype;
+
+		// Enforce the constructor to be what we expect
+		Class.prototype.constructor = Class;
+
+		// And make this class extendable
+		Class.extend = arguments.callee;
+
+		return Class;
 	};
 })();
 // ------------------------------------VIEW---------------------------------------------
@@ -291,7 +328,7 @@ function createViewPort(configs) {
 		}
 		var main = createCanvas(width, height);
 		this.canvas = main.getContext('2d');
-		
+
 		for ( var index = 1; index <= howMuchLayers; index++) {
 			this.layers.push(getContext(width, height));
 		}
@@ -306,12 +343,20 @@ function createViewPort(configs) {
 
 		this.marge = function() {
 			for ( var index = 0; index < howMuchLayers; index++) {
-				this.canvas.drawImage(this.layers[index].canvas,0,0);
+				this.canvas.drawImage(this.layers[index].canvas, 0, 0);
 			}
 		};
-		
-		this.draw=function(obj,level){
+		this.drawOnTop = function(obj) {
+			obj.draw(this.layers[howMuchLayers - 1]);
+		};
+		this.drawOnBack = function(obj) {
+			obj.draw(this.layers[0]);
+		};
+		this.draw = function(obj, level) {
 			obj.draw(this.layers[level]);
+		};
+		this.layer = function(level) {
+			return this.layers[level];
 		};
 	});
 }
@@ -496,41 +541,175 @@ function Tile() {
 
 // ------------------------------------MODELING----------------------------------------
 
-ModelObject = Class.create(ProtoObjectClass, {
-	initialize : function(view) {
+ModelObject = Class.extend({
+	init : function(view) {
 		this.view = view;
 		this.internalInitialize();
 	},
 	internalInitialize : function() {
 		this.x = 0;
 		this.y = 0;
+		this.layout = 0;
 	},
 	update : function() {
 
 	},
-	draw : function(ctx) {
-		this.view.draw(ctx, this.x, this.y);
+	draw : function(viewport) {
+		this.view.draw(ViewPort.layer(this.layout), this.x, this.y);
 	}
 });
 
 // -------------------------------------CORE-------------------------------------------
 
+// ------------------------------------MODULES-----------------------------------------
+ModuleManager = Class.extend(new (function() {
+	var hooks = {
+		startRequest : [],
+		started : [],
+		stopRequest : [],
+		stopped : [],
+		updateRequest : [],
+		updated : [],
+		drawRequest : [],
+		drawn : []
+	};
+
+	this.addHook = function(type, module) {
+		hooks[type].push(module);
+	};
+
+	this.execute = function(type) {
+		hooks[type].each(function() {
+			this.execute(type);
+		});
+	};
+
+}));
+Module = Class.extend(new (function() {
+	this.execute = function(type) {
+		this[type]();
+	};
+	this.startRequest = function() {
+
+	};
+	this.started = function() {
+
+	};
+	this.stopRequest = function() {
+
+	};
+	this.stopped = function() {
+
+	};
+	this.updateRequest = function() {
+
+	};
+	this.updated = function() {
+
+	};
+	this.drawRequest = function() {
+
+	};
+	this.drawn = function() {
+
+	};
+}));
 Ph = new (function() {
 	var objects = [];
-});
+	var toDelete = [];
+	var moduleManager = new ModuleManager();
 
+	// to delete
+	this.m = moduleManager;
+	this.o = objects;
+	//
+	this.loadModule = function(module) {
+		i(module);
+		module.installOn(moduleManager);
+	};
+	this.addObject = function(obj) {
+		objects.push(obj);
+	};
+
+	this.addObjectToDelete = function(obj) {
+		toDelete.push(obj);
+	};
+
+	function update() {
+		for ( var index = 0; index < objects.length; index++) {
+			objects[index].update();
+		}
+	}
+	function draw() {
+		ViewPort.clean();
+		for ( var index = 0; index < objects.length; index++) {
+			objects[index].draw(ViewPort);
+		}
+		ViewPort.marge();
+	}
+	function clean() {
+		for ( var index = 0; index < toDelete.length; index++) {
+			var current = toDelete[index];
+			objects.slice(objects.indexOf(current));
+		}
+		toDelete = [];
+	}
+	var requestAnimation = getRequestAnimationFrame();
+	var running = false;
+	doLoop = function() {
+		moduleManager.execute('updateRequest');
+		update();
+		moduleManager.execute('updated');
+		moduleManager.execute('drawRequest');
+		draw();
+		moduleManager.execute('drawn');
+		clean();
+		if (running)
+			requestAnimation(doLoop);
+	};
+	this.start = function() {
+		moduleManager.execute('startRequest');
+		running = true;
+		moduleManager.execute('started');
+		requestAnimation(doLoop);
+	};
+	this.stop = function() {
+		moduleManager.execute('stopRequest');
+		running = false;
+		moduleManager.execute('stopped');
+	};
+});
 // --------------------------------------LOADING----------------------------------------
 function pharolitoConfigs(url) {
-	new Ajax().success(function($xml) {
-		var root = $xml.firstChild;
-		loadSprits(root);
-		var configs = t(root, 'config');
-		if (configs) {
-			loadTransparentColor(configs);
-			createViewPort(t(configs, 'viewport'));
-		}
-	}).get(url);
+	new Ajax().success(
+			function($xml) {
+				var root = $xml.firstChild;
+				loadSprits(root);
+				var configs = t(root, 'config');
+				if (configs) {
+					loadTransparentColor(configs);
+					createViewPort(t(configs, 'viewport'));
+				}
+				loadModules(root);
+
+				var url = t(root, 'gamescript').getAttribute('url')
+						.selfTemplate(/\{.*\}/g);
+				eval('new Ajax().execute().get(' + url + ')');
+			}).get(url);
 }
+
+function loadModules(root) {
+	var tModules = t(root, 'modules');
+	if (tModules) {
+		var modules = tModules.getElementsByTagName('module');
+		for ( var index = 0; index < modules.length; index++) {
+			var current = modules[index];
+			var url = current.getAttribute('url').selfTemplate(/\{.*\}/g);
+			eval('new Ajax().execute().get(' + url + ')');
+		}
+	}
+}
+
 function loadTransparentColor(configs) {
 	var transparentColor = t(configs, 'transparentColor');
 	if (transparentColor) {
@@ -553,6 +732,7 @@ function loadSprits(root) {
 		eval('SpriteRepository.loadSprites(' + toEval + ')');
 	}
 }
+
 // -------------------------------BASIC_ANIMATION-------------------------------------
 // SpriteRepository.loadSprites(DEFAULT_SPRITE_IMAGE_REPOSITORY +
 // 'anime.xml');
@@ -574,3 +754,4 @@ function loadSprits(root) {
 // p.nextStep('goDown');
 // p2.nextStep('goUp');
 // }
+

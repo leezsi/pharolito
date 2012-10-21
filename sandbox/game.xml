@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <game>
-	<gamescript url='' />
+	<gamescript url='{DEFAULT_GAME_REPOSITORY + "game.js"}' />
 	<sprites>{DEFAULT_SPRITE_IMAGE_REPOSITORY + 'anime.xml'}</sprites>
 	<!-- <images> -->
 	<!-- <image></image> -->
@@ -14,8 +14,6 @@
 		<transparentColor r='32' g='156' b='0' />
 	</config>
 	<modules>
-		<module>
-			<url></url>
-		</module>
+		<module url='PHAROLITO_RELATIVE + "basics.js"' />
 	</modules>
 </game>
