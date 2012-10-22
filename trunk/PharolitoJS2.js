@@ -6,6 +6,9 @@ var TRANSPARENT_PIXEL_COLOR = {
 	g : 156,
 	b : 0
 };
+
+// --------------------------------------------------------------------------------------------
+
 var getRequestAnimationFrame = function() {
 	return window.requestAnimationFrame || window.webkitRequestAnimationFrame
 			|| window.mozRequestAnimationFrame || window.oRequestAnimationFrame
@@ -97,13 +100,24 @@ Function.prototype.empty = function() {
 	};
 };
 Function.prototype.params = function() {
-	var toParse = this.toString().match(
-			new RegExp("\\([\\w\\,\\$\\s]*\\)", "g")).shift();
-	// (?:\\()
-	// (?:\))
-	return (toParse.substring(1, toParse.length - 1)).bTrim().split(',');
+	var names = this.toString().match(/^[\s\(]*function[^(]*\(([^)]*)\)/)[1]
+			.replace(/\/\/.*?[\r\n]|\/\*(?:.|[\r\n])*?\*\//g, '').replace(
+					/\s+/g, '').split(',');
+	return names.length == 1 && !names[0] ? [] : names;
 };
-
+function s(arg) {
+	return Array.prototype.slice.call(arg);
+}
+Function.prototype.wrap = function(ctx, anotherFn) {
+	var self = this;
+	if (anotherFn.params().shift() == '$super') {
+		return function() {
+			anotherFn.apply(this, [ function() {
+				self.apply(ctx, s(arguments));
+			} ].concat(s(arguments)));
+		};
+	}
+};
 Function.prototype.invokeSellecting = function(params) {
 	var p = this.params();
 	var args = [];
@@ -247,65 +261,39 @@ HTMLInputElement.prototype.serialize = function() {
 };
 // -------------------------------------------------------------------------
 
-/*
- * Inspired by Simple JavaScript Inheritance By John Resig http://ejohn.org/ MIT
- * Licensed.
- */
 (function() {
-	// The base Class implementation (does nothing)
 	this.Class = function() {
+		if (!initializing && this.init) {
+			this.init.apply(this, s(arguments));
+		}
 	};
 
-	// Create a new Class that inherits from this class
-	Class.extend = function(prop) {
-		var _super = this.prototype;
+	Class.extend = function(behaviour) {
 
-		// Instantiate a base class (but only create the instance,
-		// don't run the init constructor)
 		initializing = true;
-		var prototype = new this();
+		var proto = new this();
 		initializing = false;
-
-		// Copy the properties over onto the new prototype
-		for ( var name in prop) {
-			// Check if we're overwriting an existing function
-			prototype[name] = typeof prop[name] == "function"
-					&& typeof _super[name] == "function"
-					&& prop[name].params().shift() == '$super' ? (function(
-					name, fn) {
-				return function() {
-					// The method only need to be bound temporarily, so we
-					// remove it when we're done executing
-					var self = this;
-					var args = arguments;
-					function s() {
-						return _super[name].apply(self, args);
-					}
-					var ret = fn.apply(this, [ s ].concat(arguments));
-					return ret;
-				};
-			})(name, prop[name]) : prop[name];
-		}
-
-		// The dummy class constructor
-		function Class() {
-			// All construction is actually done in the init method
+		function subclass() {
 			if (!initializing && this.init)
 				this.init.apply(this, arguments);
 		}
 
-		// Populate our constructed prototype object
-		Class.prototype = prototype;
+		for ( var prop in behaviour) {
+			if (proto[prop] && typeof proto[prop] == 'function'
+					&& behaviour[prop].params().shift() == '$super') {
+				proto[prop] = proto[prop].wrap(proto, behaviour[prop]);
+			} else {
+				proto[prop] = behaviour[prop];
+			}
+		}
 
-		// Enforce the constructor to be what we expect
-		Class.prototype.constructor = Class;
-
-		// And make this class extendable
-		Class.extend = arguments.callee;
-
-		return Class;
+		subclass.prototype = proto;
+		subclass.prototype.constructor = subclass;
+		subclass.extend = arguments.callee;
+		return subclass;
 	};
 })();
+
 // ------------------------------------VIEW---------------------------------------------
 
 function createViewPort(configs) {
@@ -539,27 +527,27 @@ function Tile() {
 	};
 }
 
+// -------------------------------------CORE-------------------------------------------
+
 // ------------------------------------MODELING----------------------------------------
 
-ModelObject = Class.extend({
-	init : function(view) {
+ModelObject = Class.extend(new (function() {
+	this.init = function(view) {
 		this.view = view;
 		this.internalInitialize();
-	},
-	internalInitialize : function() {
+	};
+	this.internalInitialize = function() {
 		this.x = 0;
 		this.y = 0;
 		this.layout = 0;
-	},
-	update : function() {
+	};
+	this.update = function() {
 
-	},
-	draw : function(viewport) {
+	};
+	this.draw = function(viewport) {
 		this.view.draw(ViewPort.layer(this.layout), this.x, this.y);
-	}
-});
-
-// -------------------------------------CORE-------------------------------------------
+	};
+}));
 
 // ------------------------------------MODULES-----------------------------------------
 ModuleManager = Class.extend(new (function() {
@@ -586,6 +574,9 @@ ModuleManager = Class.extend(new (function() {
 
 }));
 Module = Class.extend(new (function() {
+	this.init = function() {
+		Ph.loadModule(this);
+	};
 	this.execute = function(type) {
 		this[type]();
 	};
@@ -624,7 +615,6 @@ Ph = new (function() {
 	this.o = objects;
 	//
 	this.loadModule = function(module) {
-		i(module);
 		module.installOn(moduleManager);
 	};
 	this.addObject = function(obj) {
