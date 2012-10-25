@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <game>
-	<gamescript url='{DEFAULT_GAME_REPOSITORY + "game.js"}' />
-	<sprites>{DEFAULT_SPRITE_IMAGE_REPOSITORY + 'anime.xml'}</sprites>
+	<gamescript url='DEFAULT_GAME_REPOSITORY + "game.js"' />
+	<sprites>DEFAULT_SPRITE_IMAGE_REPOSITORY + 'anime.xml'</sprites>
 	<!-- <images> -->
 	<!-- <image></image> -->
 	<!-- </images> -->

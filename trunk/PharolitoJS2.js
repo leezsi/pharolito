@@ -2,11 +2,7 @@ var PHAROLITO_RELATIVE = '../trunk/';
 var DEFAULT_SPRITE_IMAGE_REPOSITORY = 'sprites/';
 DEFAULT_GAME_REPOSITORY = 'gameInfo/';
 var gameURL = null;
-var TRANSPARENT_PIXEL_COLOR = {
-	r : 32,
-	g : 156,
-	b : 0
-};
+
 // --------------------------------KEYWORD_CONSTANTS-------------------------------------------
 KW_backspace = 8, KW_tab = 9, KW_enter = 13, KW_shift = 16, KW_ctrl = 17,
 		KW_alt = 18, KW_pause = 19, KW_capslock = 20, KW_escape = 27;
@@ -46,7 +42,19 @@ var getRequestAnimationFrame = function() {
 			};
 };
 // ---------------------------------------BASIC_TYPES----------------------------------
+function c(type) {
+	return document.createElement(type);
+}
 
+Function.prototype.parametrized = function(args) {
+	var ctx = args['$self'];
+	var params = this.params();
+	var toInvoke = [];
+	for ( var index = 0; index < params.length; index++) {
+		toInvoke.pus(args[params[index]]);
+	}
+	return this.apply(ctx, toInvoke);
+};
 Array.prototype.each = function(fn) {
 	for ( var i = 0; i < this.length; i++) {
 		var c = this[i];
@@ -99,15 +107,16 @@ function URI(uri) {
 	this.name = tmp[0];
 	this.domain = tmp[1];
 }
+String.prototype.toURI = function() {
+	return new URI(this);
+};
 Array.prototype.remove = function(o) {
 	var i = this.indexOf(o);
 	if (i > -1) {
 		this.splice(i, 1);
 	}
 };
-String.prototype.toURI = function() {
-	return new URI(this);
-};
+
 String.prototype.test = function(regexp) {
 	return regexp.test(this);
 };
@@ -184,79 +193,6 @@ function wrapperSuperFunction(thisObj, superObj, callback) {
 			args = [ superObj ].concat(args);
 		}
 		return callback.apply(thisObj, args);
-	};
-
-};
-
-// ---------------------------------------AJAX----------------------------------
-
-function Ajax() {
-	var factory = function() {
-		return (window.XMLHttpRequest || new ActiveXObject("Microsoft.XMLHTTP"));
-	};
-	var request = new (factory())();
-	var $success = $execute = $error = undefined;
-	var self = this;
-	function config() {
-		request.onreadystatechange = function() {
-			if (this.readyState == 4) {
-				if (this.status == 200) {
-					if ($success)
-						$success.invokeSellecting({
-							$text : request.responseText,
-							$xml : request.responseXML,
-							$self : self
-						});
-					else if ($execute)
-						$execute(request.responseText);
-					else
-						$error.invokeSellecting({
-							$text : 'Not execute or success',
-							$code : -1,
-							$self : self
-						});
-				} else {
-					($error || Function.empty()).invokeSellecting({
-						$text : request.statusText,
-						$code : request.status,
-						$self : self
-					});
-				}
-			}
-		};
-	}
-	this.success = function(callback) {
-		$success = callback;
-		return this;
-	};
-	this.error = function(callback) {
-		$error = callback;
-		return this;
-	};
-	this.execute = function() {
-		$execute = function($text) {
-			eval($text);
-		};
-		return this;
-	};
-	this.get = function(url) {
-		config();
-		request.open('GET', url, true);
-		request.send();
-	};
-	this.post = function(url, params) {
-		config();
-		request.open('POST', url, true);
-		request.send(params.serialize());
-	};
-	this.method = function(method, url, params) {
-		config();
-		if (method.toUpperCase() == 'GET') {
-			this.get(url + (params ? '?' + params : ''));
-		} else {
-			request.open(method.toUpperCase(), url, true);
-			request.send(params.serialize());
-		}
 	};
 
 };
@@ -449,181 +385,181 @@ function createViewPort(configs) {
 	});
 }
 
-ImageStore = new (function() {
+ResourceLoader = new (Class
+		.extend(new (function() {
+			var resources = {};
+			var requestFactory = (function() {
+				return (window.XMLHttpRequest || new ActiveXObject(
+						"Microsoft.XMLHTTP"));
+			})();
+
+			function get(request, url) {
+				request.open('GET', url, false);
+				request.send();
+			}
+
+			this.load = function() {
+				for ( var index = 0; index < arguments.length; index++) {
+					var current = arguments[index];
+					var request = new requestFactory();
+					get(request, current['url']);
+					resources[current['name']] = {
+						text : request.responseText,
+						xml : request.responseXML,
+						code : request.status,
+						status : request.statusText
+					};
+				}
+			};
+
+			this.temporal = function(url) {
+				var request = new requestFactory();
+				get(request, url);
+				return {
+					text : request.responseText,
+					xml : request.responseXML,
+					code : request.status,
+					status : request.statusText
+				};
+			};
+
+			this.get = function(name) {
+				return resources[name];
+			};
+		})()));
+
+ImageRepository = new (Class.extend(new (function() {
+
 	var images = {};
-	var waiting = {};
-	this.i = images;
-	this.load = function(name, url) {
-		var img = document.createElement('img');
-		var self = this;
-		img.onload = function() {
-			self.imageLoaded(name);
-		};
-		img.src = url;
+	var toComplete = 0;
+
+	this.complete = function() {
+		return toComplete == 0;
+	};
+
+	this.loadImage = function(name, url) {
+		var img = c('img');
+		toComplete++;
+		img.addEventListener('load', function() {
+			loaded();
+		});
 		images[name] = img;
+		img.src = url;
 	};
-	this.isComplete = function(imageName) {
-		return images[imageName] && images[imageName].complete;
-	};
-	this.imageLoaded = function(imageName) {
-		if (waiting[imageName] == true) {
-			delete waiting[imageName];
-			SpriteRepository.proccessQueue(imageName);
+	function loaded() {
+		toComplete--;
+	}
+
+	this.loadImageOnce = function(imageName, url) {
+		if (!this.has(imageName)) {
+			this.loadImage(imageName, url);
 		}
 	};
+	this.has = function(imageName) {
+		return typeof this.get(name) != 'undefined';
+	};
+
 	this.get = function(name) {
 		return images[name];
 	};
-	this.waitingFor = function(imageName) {
-		waiting[imageName] = true;
-	};
-});
-SpriteRepository = new (function() {
-	var waiting = {};
-	var sprites = {};
-	this.loadSprites = function(url) {
-		var self = this;
-		new Ajax().success(function($xml) {
-			var root = $xml.firstChild;
-			var imageName = root.getAttribute('image');
-			if (ImageStore.isComplete(imageName))
-				self.proccess($xml);
-			else
-				self.queueProccess(imageName, $xml);
-		}).get(url);
-	};
-	this.proccessQueue = function(imageName) {
-		this.proccess(waiting[imageName]);
-		delete waiting[imageName];
-	};
-	this.queueProccess = function(imageName, xml) {
-		var uri = imageName.toURI();
-		waiting[uri.name] = xml;
-		ImageStore.waitingFor(uri.name);
-		ImageStore.load(uri.name, imageName);
-	};
-	this.proccess = function(xml) {
-		var root = xml.firstChild;
-		var imageName = root.getAttribute('image').toURI();
-		var image = ImageStore.get(imageName.name);
-		var xmlSprites = root.getElementsByTagName('sprite');
-		for ( var index = 0; index < xmlSprites.length; index++) {
-			var currentSpriteData = xmlSprites[index];
-			var bounds = currentSpriteData.getElementsByTagName('bounds')[0];
-			var animations = currentSpriteData
-					.getElementsByTagName('animations')[0];
-			var name = currentSpriteData.getAttribute('name');
-			var rows = currentSpriteData.getAttribute('rows');
-			var columns = currentSpriteData.getAttribute('columns');
-			sprites[name] = new Sprite(image, rows, columns, bounds,
-					animations, index);
+})()))();
+
+SpriteRepository = new (Class.extend(new (function() {
+
+	this.sprites = {};
+
+	this.load = function(root) {
+		var img = root.getAttribute('image');
+		ImageRepository.loadImageOnce(img.toURI().name, img);
+		var spritesDefinition = root.getElementsByTagName('sprite');
+		for ( var index = 0; index < spritesDefinition.length; index++) {
+			var current = spritesDefinition[index];
+			this.sprites[current.getAttribute('name')] = new Sprite(current,
+					ImageRepository.get(img.toURI().name), index);
+			this.sprites[current.getAttribute('name')] = [ current,
+					ImageRepository.get(img.toURI().name), index ];
 		}
 	};
-	this.findAll = function() {
-		return sprites;
-	};
-	this.findByName = function(name) {
-		return sprites[name];
-	};
-});
 
-function Step(step, sprite) {
-	this.image = sprite.image;
-	this.offsetX = sprite.x;
-	this.offsetY = sprite.y;
-	this.width = sprite.width / sprite.columns;
-	this.height = sprite.height / sprite.rows;
-	this.y = step.getAttribute('row').toInt();
-	this.x = step.getAttribute('column').toInt();
+	this.get = function(name) {
+		var data= this.sprites[name];
+		return new Sprite(data[0],data[1],data[2]);
+	};
+
+})()))();
+
+Step = Class.extend(new (function() {
+	this.init = function(step, sprite) {
+		this.image = sprite.image;
+		this.offsetX = sprite.x;
+		this.offsetY = sprite.y;
+		this.width = sprite.width / sprite.columns;
+		this.height = sprite.height / sprite.rows;
+		this.y = step.getAttribute('row').toInt();
+		this.x = step.getAttribute('column').toInt();
+	};
 	this.draw = function(ctx, posX, posY) {
 		ctx.drawImage(this.image, this.offsetX + ((this.x - 1) * this.width),
 				this.offsetY + ((this.y - 1) * this.height), this.width,
 				this.height, posX, posY, this.width, this.height);
-		var pixels = ctx.getImageData(posX, posY, this.width, this.height);
-
-		// iterate through pixel data (1 pixels consists of 4 ints in the array)
-		for ( var i = 0, len = pixels.data.length; i < len; i += 4) {
-			var r = pixels.data[i];
-			var g = pixels.data[i + 1];
-			var b = pixels.data[i + 2];
-
-			// if the pixel matches our transparent color, set alpha to 0
-			if (r == TRANSPARENT_PIXEL_COLOR.r
-					&& g == TRANSPARENT_PIXEL_COLOR.g
-					&& b == TRANSPARENT_PIXEL_COLOR.b) {
-				pixels.data[i + 3] = 0;
-			}
-		}
-		ctx.putImageData(pixels, posX, posY);
 	};
-}
+})());
 
-function Sprite(image, rows, columns, bounds, animations, index) {
-	this.image = image;
-	this.rows = rows.toInt();
-	this.columns = columns.toInt();
-	this.animations = animations;
-	this.index = index;
-	var self = this;
-	var toDraw = null;
-	var indexes = {};
-	function evalRelative(text, prop) {
-		if (text.isInteger()) {
-			self[prop] = text.toInt();
-		} else if (text.isFloat()) {
-			self[prop] = text.toFloat();
-		} else
-			eval('self.' + prop + '=(' + text.selfTemplate(/\{.*\}/g) + ')');
+Sprite = Class.extend(new (function() {
+	function setProperty(node, image, property, index, width, height) {
+		var val = null;
+		eval('val= ' + node.getAttribute(property));
+		return val;
 	}
+
 	this.animations = {};
-	evalRelative(bounds.getAttribute('width'), 'width');
-	evalRelative(bounds.getAttribute('height'), 'height');
-	evalRelative(bounds.getAttribute('x'), 'x');
-	evalRelative(bounds.getAttribute('y'), 'y');
-	var animats = animations.getElementsByTagName('animation');
-	for ( var index = 0; index < animats.length; index++) {
-		var animation = animats[index];
-		var animationName = animation.getAttribute('name');
-		this.animations[animationName] = [];
-		var steps = animation.getElementsByTagName('step');
-		indexes[animationName] = 0;
-		for ( var stepIndex = 0; stepIndex < steps.length; stepIndex++) {
-			var currentStep = steps[stepIndex];
-			var inst = new Step(currentStep, this);
-			this.animations[animationName].push(inst);
-			if (currentStep.getAttribute('default')) {
-				toDraw = inst;
+	this.indexes = {};
+
+	this.init = function(definition, img, index) {
+		this.cDefinition = definition;
+		this.cIndex = index;
+		this.rows = definition.getAttribute('rows').toInt();
+		this.columns = definition.getAttribute('columns').toInt();
+		this.image = img;
+		var bounds = definition.getElementsByTagName('bounds')[0];
+		this.width = setProperty(bounds, this.image, 'width', index);
+		this.height = setProperty(bounds, this.image, 'height', index);
+		this.x = setProperty(bounds, this.image, 'x', index, this.width,
+				this.height);
+		this.y = setProperty(bounds, this.image, 'y', index, this.width,
+				this.height);
+		this.makeAnimations(definition.getElementsByTagName('animations')[0]
+				.getElementsByTagName('animation'));
+	};
+	this.makeAnimations = function(definitions) {
+		for ( var index = 0; index < definitions.length; index++) {
+			var animation = definitions[index];
+			var currentAnimation = this.animations[animation
+					.getAttribute('name')] = [];
+			this.indexes[animation.getAttribute('name')] = 0;
+			var steps = animation.getElementsByTagName('step');
+			for ( var i = 0; i < steps.length; i++) {
+				var step = steps[i];
+				var inst = new Step(step, this);
+				currentAnimation.push(inst);
+				if (step.getAttribute('default')) {
+					this.toDraw = inst;
+				}
 			}
 		}
-	}
-
+	};
 	this.nextStep = function(selector) {
-		var tmpIdx = (indexes[selector]++);
+		var tmpIdx = (this.indexes[selector]++);
 		if (tmpIdx == this.animations[selector].length)
-			indexes[selector] = tmpIdx = 0;
-		toDraw = this.animations[selector][tmpIdx];
+			this.indexes[selector] = tmpIdx = 0;
+		this.toDraw = this.animations[selector][tmpIdx];
 	};
 
 	this.draw = function(ctx, posX, posY) {
-		toDraw.draw(ctx, posX, posY);
+		this.toDraw.draw(ctx, posX, posY);
 	};
-	this.d = function() {
-		return toDraw;
-	};
-	this.clone = function(spriteId) {
-		var clone = new Sprite(image, rows, columns, bounds, animations,
-				this.index);
-		SpriteRepository.register(spriteId, clone);
-		return clone;
-	};
-}
 
-function Tile() {
-	var objects = [];
-	this.contains = function(obj) {
-		return objects.indexOf(obj) > -1;
-	};
-}
+}));
 
 // -------------------------------------CORE-------------------------------------------
 
@@ -769,7 +705,8 @@ Ph = new (function() {
 	};
 	this.start = function() {
 		if (first) {
-			eval('new Ajax().execute().get(' + gameURL + ')');
+			eval('var script = ' + gameURL);
+			eval(ResourceLoader.temporal(script).text);
 			first = false;
 		}
 		moduleManager.execute('startRequest');
@@ -790,21 +727,19 @@ Ph = new (function() {
 });
 // --------------------------------------LOADING----------------------------------------
 function pharolitoConfigs(url) {
-	new Ajax().success(
-			function($xml) {
-				var root = $xml.firstChild;
-				loadSprits(root);
-				var configs = t(root, 'config');
-				if (configs) {
-					loadTransparentColor(configs);
-					createViewPort(t(configs, 'viewport'));
-				}
-				loadModules(root);
 
-				gameURL = t(root, 'gamescript').getAttribute('url')
-						.selfTemplate(/\{.*\}/g);
+	var xml = ResourceLoader.temporal(url).xml;
 
-			}).get(url);
+	var root = xml.firstChild;
+	loadSprites(root);
+	var configs = t(root, 'config');
+	if (configs) {
+		createViewPort(t(configs, 'viewport'));
+	}
+	loadModules(root);
+
+	eval('gameURL = t(root, "gamescript").getAttribute("url")');
+
 }
 
 function loadModules(root) {
@@ -813,32 +748,21 @@ function loadModules(root) {
 		var modules = tModules.getElementsByTagName('module');
 		for ( var index = 0; index < modules.length; index++) {
 			var current = modules[index];
-			var url = current.getAttribute('url').selfTemplate(/\{.*\}/g);
-			eval('new Ajax().execute().get(' + url + ')');
+			eval('var url =' + current.getAttribute('url'));
+
+			eval(ResourceLoader.temporal(url).text);
 		}
 	}
 }
 
-function loadTransparentColor(configs) {
-	var transparentColor = t(configs, 'transparentColor');
-	if (transparentColor) {
-		TRANSPARENT_PIXEL_COLOR['r'] = transparentColor.getAttribute('r')
-				.toInt()
-				|| TRANSPARENT_PIXEL_COLOR['r'];
-		TRANSPARENT_PIXEL_COLOR['g'] = transparentColor.getAttribute('g')
-				.toInt()
-				|| TRANSPARENT_PIXEL_COLOR['g'];
-		TRANSPARENT_PIXEL_COLOR['b'] = transparentColor.getAttribute('b')
-				.toInt()
-				|| TRANSPARENT_PIXEL_COLOR['b'];
-	}
-}
-function loadSprits(root) {
+function loadSprites(root) {
 	var sprites = t(root, 'sprites');
+	i(sprites);
 	if (sprites) {
-		var toEval = sprites.firstChild.data;
-		toEval = toEval.selfTemplate(/\{.*\}/g);
-		eval('SpriteRepository.loadSprites(' + toEval + ')');
+		eval('var url =' + sprites.firstChild.data);
+		var data = ResourceLoader.temporal(url);
+		i(data);
+		eval('SpriteRepository.load(data.xml.firstChild)');
 	}
 }
 
