@@ -19,15 +19,13 @@ var Fps = GameObject.extend(new (function() {
 				ctx.save();
 				ctx.fillStyle = '#000';
 				ctx.font = 'bold 12px sans-serif';
-				ctx
-						.fillText('FPS: ' + currentFps + ' - ' + (this.pass++),
-								x, y);
+				ctx.fillText('FPS: ' + currentFps + ' - ' + (this.pass++)
+						+ ' (' + x + ',' + y + ')', x, y);
 				ctx.restore();
 				frameCount += 1;
 			}
 		});
-		this.layout = 3;
-		this.pos = [ 10, 50, 35, 80, 300, 298, 403, 493 ];
+		this.layer = Ph.topLayer();
 	};
 	this.fps = function() {
 		return currentFps;

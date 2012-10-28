@@ -34,14 +34,57 @@ KW_f6 = 117, KW_f7 = 118, KW_f8 = 119, KW_f9 = 120, KW_f10 = 121, KW_f11 = 122,
 
 // --------------------------------------------------------------------------------------------
 
-var getRequestAnimationFrame = function() {
+var requestAnimationFrame = (function() {
 	return window.requestAnimationFrame || window.webkitRequestAnimationFrame
 			|| window.mozRequestAnimationFrame || window.oRequestAnimationFrame
 			|| window.msRequestAnimationFrame || function(callback) {
-				window.setTimeout(enroute, 1 / 60 * 1000);
+				window.setTimeout(callback, 1 / 60 * 1000);
 			};
-};
+})();
 // ---------------------------------------BASIC_TYPES----------------------------------
+function a(obj) {
+	if (typeof obj == 'array')
+		return obj;
+	return [ obj ];
+}
+
+Document.prototype.toJSON = function() {
+	var json = {};
+
+	if (this.attributes && this.attributes.length > 0) {
+		json["@atts"] = {};
+		for ( var j = 0; j < this.attributes.length; j++) {
+			var attribute = this.attributes.item(j);
+			json["@atts"][attribute.nodeName] = attribute.nodeValue;
+		}
+	}
+
+	for ( var i = 0; i < this.childNodes.length; i++) {
+		var item = this.childNodes.item(i);
+		if (item.nodeType != Node.COMMENT_NODE) {
+			var name = item.nodeName;
+			if (json[name]) {
+				if (typeof json[name] != 'array') {
+					var tmp = [];
+					json[name] = tmp;
+				}
+				if (name == '#text')
+					json.value = item.nodeValue;
+				else
+					json[name].push(item.toJSON());
+			} else {
+				if (name == '#text')
+					json.value = item.nodeValue;
+				else
+					json[name] = item.toJSON();
+			}
+		}
+	}
+	return json;
+};
+
+Element.prototype.toJSON = Document.prototype.toJSON;
+
 function c(type) {
 	return document.createElement(type);
 }
@@ -199,17 +242,6 @@ function wrapperSuperFunction(thisObj, superObj, callback) {
 
 // ---------------------------------------HTML_TYPES----------------------------------
 
-Serializable = new function() {
-	this.isImplemented = function(obj) {
-		return obj.isSerializable == true;
-	};
-	this.implement = function(obj) {
-		obj.isSerializable = true;
-	};
-};
-
-Serializable.implement(HTMLInputElement.prototype);
-
 (function() {
 	if (HTMLElement.prototype.addEventListener) {
 		HTMLElement.prototype.$addEventListener = HTMLElement.prototype.addEventListener;
@@ -231,30 +263,6 @@ HTMLElement.prototype.addEventListener = function(type, listener) {
 };
 HTMLElement.prototype.removeEventListener = function(type, listener) {
 	return this.$removeEventListener(type, listener);
-};
-HTMLFormElement.prototype.serialize = function() {
-	var values = [];
-	for ( var index = 0; index < this.childNodes.length; index++) {
-		var child = this.childNodes[index];
-		if (Serializable.isImplemented(child))
-			values.push(child.serialize());
-	}
-	;
-	return values.join('&');
-};
-
-HTMLFormElement.prototype.ajax = function() {
-	var ajax = new Ajax();
-	if (this.getAttribute('execute'))
-		ajax.execute();
-	if (this.getAttribute('success')) {
-		eval('ajax.success(' + this.getAttribute('success') + ');');
-	}
-	ajax.method(this.method, this.action, this.serialize());
-};
-
-HTMLInputElement.prototype.serialize = function() {
-	return this.name + '=' + this.value;
 };
 // -------------------------------------------------------------------------
 
@@ -316,74 +324,6 @@ keyword = new (Class.extend(new function() {
 		return res;
 	};
 }));
-function createViewPort(configs) {
-	if (!configs) {
-		throw 'viewport configs needed';
-	}
-	ViewPort = new (function() {
-		var howMuchLayers = td(configs, 'layers').toInt();
-		this.layers = [];
-		var width = t(configs, 'bounds').getAttribute('width').toInt();
-		var height = t(configs, 'bounds').getAttribute('height').toInt();
-		function createCanvas(width, height) {
-			var canvas = document.createElement('canvas');
-			canvas.width = width;
-			canvas.height = height;
-			canvas.addEventListener('mousedown', function(event) {
-				mouse.isPressed = true;
-				mouse.button = event.button;
-			});
-			document.body.addEventListener('keydown', function(event) {
-				keyword.addKey(event.which);
-			});
-			canvas.addEventListener('mousemove', function(event) {
-				mouse.x = event.x;
-				mouse.y = event.y;
-			});
-			canvas.addEventListener('mouseup', function(event) {
-				mouse.isPressed = false;
-				mouse.button = false;
-			});
-
-			return canvas;
-		}
-		function getContext(width, height) {
-			return createCanvas(width, height).getContext('2d');
-		}
-		var main = createCanvas(width, height);
-		this.canvas = main.getContext('2d');
-
-		for ( var index = 1; index <= howMuchLayers; index++) {
-			this.layers.push(getContext(width, height));
-		}
-		document.getElementById(td(configs, 'holder')).appendChild(main);
-
-		this.clean = function() {
-			this.canvas.clearRect(0, 0, width, height);
-			for ( var index = 0; index < howMuchLayers; index++) {
-				this.layers[index].clearRect(0, 0, width, height);
-			}
-		};
-
-		this.marge = function() {
-			for ( var index = 0; index < howMuchLayers; index++) {
-				this.canvas.drawImage(this.layers[index].canvas, 0, 0);
-			}
-		};
-		this.drawOnTop = function(obj) {
-			obj.draw(this.layers[howMuchLayers - 1]);
-		};
-		this.drawOnBack = function(obj) {
-			obj.draw(this.layers[0]);
-		};
-		this.draw = function(obj, level) {
-			obj.draw(this.layers[level]);
-		};
-		this.layer = function(level) {
-			return this.layers[level];
-		};
-	});
-}
 
 ResourceLoader = new (Class
 		.extend(new (function() {
@@ -464,102 +404,46 @@ ImageRepository = new (Class.extend(new (function() {
 	};
 })()))();
 
-SpriteRepository = new (Class.extend(new (function() {
-
-	this.sprites = {};
-
-	this.load = function(root) {
-		var img = root.getAttribute('image');
-		ImageRepository.loadImageOnce(img.toURI().name, img);
-		var spritesDefinition = root.getElementsByTagName('sprite');
-		for ( var index = 0; index < spritesDefinition.length; index++) {
-			var current = spritesDefinition[index];
-			this.sprites[current.getAttribute('name')] = new Sprite(current,
-					ImageRepository.get(img.toURI().name), index);
-			this.sprites[current.getAttribute('name')] = [ current,
-					ImageRepository.get(img.toURI().name), index ];
-		}
+function Sprite(def, img) {
+	var image = img;
+	this.x = def.x;
+	this.y = def.y;
+	this.width = def.width / def.columns;
+	this.height = def.height / def.rows;
+	i(this);
+	this.draw = function(ctx, args) {
+		var offsetX = args.x - args.width / 2;
+		var offsetY = args.y - args.height / 2;
+		ctx.drawImage(image, this.x, this.y, this.width, this.height, offsetX,
+				offsetY, args.width, args.height);
+		// ctx.drawImage(image, this.x, this.y, this.width, this.heigth, args.x,
+		// args.y, args.width, args.height);
 	};
+}
 
+SpriteRepository = new (function() {
+	var sprites = {};
 	this.get = function(name) {
-		var data= this.sprites[name];
-		return new Sprite(data[0],data[1],data[2]);
+		return sprites[name];
 	};
 
-})()))();
-
-Step = Class.extend(new (function() {
-	this.init = function(step, sprite) {
-		this.image = sprite.image;
-		this.offsetX = sprite.x;
-		this.offsetY = sprite.y;
-		this.width = sprite.width / sprite.columns;
-		this.height = sprite.height / sprite.rows;
-		this.y = step.getAttribute('row').toInt();
-		this.x = step.getAttribute('column').toInt();
-	};
-	this.draw = function(ctx, posX, posY) {
-		ctx.drawImage(this.image, this.offsetX + ((this.x - 1) * this.width),
-				this.offsetY + ((this.y - 1) * this.height), this.width,
-				this.height, posX, posY, this.width, this.height);
-	};
-})());
-
-Sprite = Class.extend(new (function() {
-	function setProperty(node, image, property, index, width, height) {
-		var val = null;
-		eval('val= ' + node.getAttribute(property));
-		return val;
+	function createSprites(defs, img) {
+		for ( var i = 0; i < defs.length; i++) {
+			var current = defs[i]['@atts'];
+			sprites[current.name] = new Sprite(current, img);
+		}
 	}
-
-	this.animations = {};
-	this.indexes = {};
-
-	this.init = function(definition, img, index) {
-		this.cDefinition = definition;
-		this.cIndex = index;
-		this.rows = definition.getAttribute('rows').toInt();
-		this.columns = definition.getAttribute('columns').toInt();
-		this.image = img;
-		var bounds = definition.getElementsByTagName('bounds')[0];
-		this.width = setProperty(bounds, this.image, 'width', index);
-		this.height = setProperty(bounds, this.image, 'height', index);
-		this.x = setProperty(bounds, this.image, 'x', index, this.width,
-				this.height);
-		this.y = setProperty(bounds, this.image, 'y', index, this.width,
-				this.height);
-		this.makeAnimations(definition.getElementsByTagName('animations')[0]
-				.getElementsByTagName('animation'));
-	};
-	this.makeAnimations = function(definitions) {
-		for ( var index = 0; index < definitions.length; index++) {
-			var animation = definitions[index];
-			var currentAnimation = this.animations[animation
-					.getAttribute('name')] = [];
-			this.indexes[animation.getAttribute('name')] = 0;
-			var steps = animation.getElementsByTagName('step');
-			for ( var i = 0; i < steps.length; i++) {
-				var step = steps[i];
-				var inst = new Step(step, this);
-				currentAnimation.push(inst);
-				if (step.getAttribute('default')) {
-					this.toDraw = inst;
-				}
-			}
+	this.load = function(config) {
+		configs = a(config.sprites);
+		for ( var i = 0; i < configs.length; i++) {
+			var current = configs[i];
+			ImageRepository.loadImage(current['@atts'].name,
+					current['@atts'].image);
+			createSprites(a(current.sprite), ImageRepository
+					.get(current['@atts'].name));
 		}
 	};
-	this.nextStep = function(selector) {
-		var tmpIdx = (this.indexes[selector]++);
-		if (tmpIdx == this.animations[selector].length)
-			this.indexes[selector] = tmpIdx = 0;
-		this.toDraw = this.animations[selector][tmpIdx];
-	};
-
-	this.draw = function(ctx, posX, posY) {
-		this.toDraw.draw(ctx, posX, posY);
-	};
-
-}));
+});
 
 // -------------------------------------CORE-------------------------------------------
 
@@ -573,13 +457,10 @@ GameObject = Class.extend(new (function() {
 	this.internalInitialize = function() {
 		this.x = 0;
 		this.y = 0;
-		this.layout = 0;
+		this.layer = 0;
 	};
-	// this.update = function() {
-	//
-	// };
-	this.draw = function(viewport) {
-		this.view.draw(ViewPort.layer(this.layout), this.x, this.y);
+	this.draw = function(cxt) {
+		this.view.draw(cxt, this.x, this.y);
 	};
 }));
 
@@ -609,6 +490,7 @@ ModuleManager = Class.extend(new (function() {
 }));
 Module = Class.extend(new (function() {
 	this.init = function() {
+		this.layer = Ph.topLayer;
 		Ph.loadModule(this);
 	};
 	this.execute = function(type) {
@@ -645,146 +527,155 @@ Module.extend = function(behaviour) {
 	new subclass();
 	return subclass;
 };
+
 Ph = new (function() {
 	var objects = [];
 	var toDelete = [];
-	var moduleManager = new ModuleManager();
-	var first = true;
-	this.loadModule = function(module) {
-		module.installOn(moduleManager);
-	};
 	this.addObject = function(obj) {
-		objects.push(obj);
+		var lay = obj.layer;
+		if ((lay > -1) && (lay < this.layers)) {
+			if (typeof objects[lay] == 'undefined')
+				objects[lay] = [];
+			objects[lay].push(obj);
+		}
 	};
 
-	this.addObjectToDelete = function(obj) {
-		toDelete.push(obj);
+	this.removeObject = function(obj) {
+		var lay = obj.layer;
+		if ((lay > 0) && (lay < this.layers)) {
+			if (typeof toDelete[lay] == 'undefined')
+				toDelete[lay] = [];
+			toDelete[lay].push(obj);
+		}
 	};
 	var updateParameters = {
-		$mouse : mouse,
-		$keyword : keyword
+		$keyword : keyword,
+		$mouse : mouse
 	};
-	function update() {
-		for ( var index = 0; index < objects.length; index++) {
-			var obj = objects[index];
-			var paramNames = objects[index].update.params();
-			var params = [];
-			for ( var idx = 0; idx < paramNames.length; idx++) {
-				params.push(updateParameters[paramNames[idx]]);
-			}
-			obj.update.apply(obj, params);
+
+	function updateObject(obj) {
+		var paramNames = obj.update.params();
+		var params = [];
+		for ( var idx = 0; idx < paramNames.length; idx++) {
+			params.push(updateParameters[paramNames[idx]]);
 		}
-		keyword.reset();
+		obj.update.apply(obj, params);
 	}
-	function draw() {
-		ViewPort.clean();
-		for ( var index = 0; index < objects.length; index++) {
-			objects[index].draw(ViewPort);
-		}
-		ViewPort.marge();
+
+	function drawObject(obj) {
+		ViewPort.draw(obj);
 	}
-	function clean() {
-		for ( var index = 0; index < toDelete.length; index++) {
-			var current = toDelete[index];
-			objects.remove(current);
-		}
-		toDelete = [];
-	}
-	var requestAnimation = getRequestAnimationFrame();
+
 	var running = false;
-	doLoop = function() {
-		moduleManager.execute('updateRequest');
-		update();
-		moduleManager.execute('updated');
-		moduleManager.execute('drawRequest');
-		draw();
-		moduleManager.execute('drawn');
-		clean();
+	function doLoop() {
+		ViewPort.clean();
+		for ( var oIndex = 0; oIndex < objects.length; oIndex++) {
+			var currentLayer = objects[oIndex];
+			if (typeof currentLayer != 'undefined')
+				for ( var lIndex = 0; lIndex < currentLayer.length; lIndex++) {
+					var obj = currentLayer[lIndex];
+					updateObject(obj);
+					drawObject(obj);
+				}
+		}
+		ViewPort.show();
+		keyword.reset();
 		if (running)
-			requestAnimation(doLoop);
-	};
+			requestAnimationFrame(doLoop);
+	}
+	var first = true;
 	this.start = function() {
+		running = true;
 		if (first) {
-			eval('var script = ' + gameURL);
-			eval(ResourceLoader.temporal(script).text);
+			eval(ResourceLoader.temporal(this.applicationScript).text);
 			first = false;
 		}
-		moduleManager.execute('startRequest');
-		running = true;
-		moduleManager.execute('started');
-		requestAnimation(doLoop);
+		requestAnimationFrame(doLoop);
 	};
+
 	this.stop = function() {
-		moduleManager.execute('stopRequest');
 		running = false;
-		moduleManager.execute('stopped');
 	};
-	// to delete
-	this.m = moduleManager;
+	this.topLayer = function() {
+		return this.layers - 1;
+	};
+
+	this.loadModule = function(module) {
+		module.installOn(this);
+	};
 	this.o = objects;
-	this.c = clean;
-	//
-});
-// --------------------------------------LOADING----------------------------------------
-function pharolitoConfigs(url) {
 
-	var xml = ResourceLoader.temporal(url).xml;
-
-	var root = xml.firstChild;
-	loadSprites(root);
-	var configs = t(root, 'config');
-	if (configs) {
-		createViewPort(t(configs, 'viewport'));
-	}
-	loadModules(root);
-
-	eval('gameURL = t(root, "gamescript").getAttribute("url")');
-
-}
-
-function loadModules(root) {
-	var tModules = t(root, 'modules');
-	if (tModules) {
-		var modules = tModules.getElementsByTagName('module');
-		for ( var index = 0; index < modules.length; index++) {
-			var current = modules[index];
-			eval('var url =' + current.getAttribute('url'));
-
-			eval(ResourceLoader.temporal(url).text);
+})();
+function createViewPort(holder, bounds) {
+	ViewPort = new (function() {
+		var width = bounds.width.toInt();
+		var height = bounds.height.toInt();
+		function createCanvas() {
+			var tmp = document.createElement('canvas');
+			tmp.width = width;
+			tmp.height = height;
+			return tmp;
 		}
-	}
+
+		main = createCanvas();
+
+		main.addEventListener('mousedown', function(event) {
+			mouse.isPressed = true;
+			mouse.button = event.button;
+		});
+		document.body.addEventListener('keydown', function(event) {
+			keyword.addKey(event.which);
+		});
+		main.addEventListener('mousemove', function(event) {
+			mouse.x = event.x;
+			mouse.y = event.y;
+		});
+		main.addEventListener('mouseup', function(event) {
+			mouse.isPressed = false;
+			mouse.button = false;
+		});
+
+		holder.appendChild(main);
+		var canvas = main.getContext('2d');
+		var buffer = createCanvas().getContext('2d');
+
+		this.clean = function() {
+			canvas.clearRect(0, 0, 500, 500);
+			buffer.clearRect(0, 0, 500, 500);
+		};
+
+		this.draw = function(obj) {
+			obj.draw(buffer);
+		};
+
+		this.show = function() {
+			canvas.drawImage(buffer.canvas, 0, 0);
+		};
+	})();
+}
+// --------------------------------------LOADING----------------------------------------
+
+function pharolitoConfigs(url) {
+	var xml = ResourceLoader.temporal(url).xml;
+	root = xml.firstChild.toJSON();
+
+	Ph.applicationScript = root.appscript['@atts'].url;
+	Ph.layers = root.viewport.layers.value.toInt();
+	createViewPort(document.getElementById(root.viewport.holder.value),
+			root.viewport.bounds['@atts']);
+	loadSprites(a(root.sprites.value));
+	loadModules(a(root.modules.module));
 }
 
-function loadSprites(root) {
-	var sprites = t(root, 'sprites');
-	i(sprites);
-	if (sprites) {
-		eval('var url =' + sprites.firstChild.data);
-		var data = ResourceLoader.temporal(url);
-		i(data);
-		eval('SpriteRepository.load(data.xml.firstChild)');
+function loadSprites(urls) {
+	for ( var index = 0; index < urls.length; index++) {
+		var url = urls[index];
+		SpriteRepository.load(ResourceLoader.temporal(url).xml.toJSON());
+	}
+};
+function loadModules(modules) {
+	for ( var index = 0; index < modules.length; index++) {
+		var module = modules[index];
+		eval(ResourceLoader.temporal(module['@atts'].url).text);
 	}
 }
-
-// -------------------------------BASIC_ANIMATION-------------------------------------
-// SpriteRepository.loadSprites(DEFAULT_SPRITE_IMAGE_REPOSITORY +
-// 'anime.xml');
-// function c() {
-// c = document.getElementById('can').getContext('2d');
-// }
-// function begin() {
-// p = SpriteRepository.findByName('person1');
-// p2 = SpriteRepository.findByName('person2');
-// c();
-// y = 0;
-// setInterval(ani, 100);
-// }
-// function ani() {
-// c.clearRect(0, 0, 500, 500);
-// p.draw(c, 40, y);
-// p2.draw(c, 40, 500 - y);
-// y = y + 10;
-// p.nextStep('goDown');
-// p2.nextStep('goUp');
-// }
-
