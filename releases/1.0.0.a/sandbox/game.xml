@@ -1,19 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<game>
-	<gamescript url='{DEFAULT_GAME_REPOSITORY + "game.js"}' />
-	<sprites>{DEFAULT_SPRITE_IMAGE_REPOSITORY + 'anime.xml'}</sprites>
+<ph>
+	<appscript url='gameInfo/game.js' />
+	<sprites>sprites/anime.xml</sprites>
 	<!-- <images> -->
 	<!-- <image></image> -->
 	<!-- </images> -->
-	<config>
-		<viewport>
-			<holder>gameHolder</holder>
-			<bounds width='500' height='500' />
-			<layers> 4</layers>
-		</viewport>
-		<transparentColor r='32' g='156' b='0' />
-	</config>
+	<viewport>
+		<holder>gameHolder</holder>
+		<bounds width='500' height='500' />
+		<layers> 4</layers>
+	</viewport>
 	<modules>
-		<module url='PHAROLITO_RELATIVE + "basics.js"' />
+		<module url='../trunk/basics.js' />
 	</modules>
-</game>
+</ph>

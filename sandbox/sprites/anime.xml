@@ -2,4 +2,14 @@
 <sprites name='anime' image='sprites/anime.png'>
 	<sprite name='person1' x='0' y='0' width='72' height='128' rows='4'
 		columns='3' />
+	<sprite name='0' x='72' y='0' width='72' height='128' rows='4'
+		columns='3' />
+	<sprite name='1' x='148' y='0' width='72' height='128' rows='4'
+		columns='3' />
+	<compundsprite name='world'>
+		<row>000000</row>
+		<row>010000</row>
+		<row>000100</row>
+		<row>010000</row>
+	</compundsprite>
 </sprites>
