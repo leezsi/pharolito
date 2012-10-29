@@ -9,6 +9,14 @@ PersonSprite = Class.extend(new (function() {
 			x : model.x,
 			y : model.y
 		});
+		if (this.model.ouch) {
+			ctx.save();
+			ctx.fillStyle = '#000';
+			ctx.font = 'bold 12px sans-serif';
+			ctx.fillText('Me dolio!!!', model.x + 20, model.y - 20);
+			ctx.restore();
+			this.model.ouch = false;
+		}
 	};
 }));
 
@@ -28,6 +36,7 @@ Person = GameObject.extend(new (function() {
 
 	this.init = function($super) {
 		$super(new PersonSprite(this));
+		this.layer = 1;
 	};
 	this.update = function($keyword) {
 		if ($keyword.isPressed(KW_left)) {
@@ -41,6 +50,18 @@ Person = GameObject.extend(new (function() {
 		}
 		if ($keyword.isPressed(KW_up)) {
 			this.y = Math.max(0, this.y - 10);
+		}
+	};
+	this.checkCollision = function($super, objects) {
+		for ( var index = 0; index < objects.length; index++) {
+			var current = objects[index];
+			var width = 72 / 4;
+			var height = 128 / 5;
+			if ((Math.abs(this.x - current.x) > width)
+					|| (Math.abs(this.y - current.y) > height))
+				this.ouch = false;
+			else
+				this.ouch = true;
 		}
 	};
 }));
@@ -64,6 +85,7 @@ RandomPerson = GameObject.extend(new (function() {
 		$super(new PersonSprite(this));
 		this.layer = 1;
 	};
+
 	this.update = function() {
 		switch (Math.floor((Math.random() * 50 - 1) / 10 + 1)) {
 		case 1:

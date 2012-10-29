@@ -48,10 +48,6 @@ function a(obj) {
 	return [ obj ];
 }
 
-function i(obj) {
-	console.info(obj);
-}
-
 Document.prototype.toJSON = function() {
 	var json = {};
 
@@ -441,8 +437,6 @@ function CompoundSprite() {
 				var offsetX = j * offsetWidth;
 				var offsetY = i * offsetHeight;
 				sprite.draw(ctx, {
-//					width : offsetWidth,
-//					height : offsetHeight,
 					x : offsetX,
 					y : offsetY
 				});
@@ -460,7 +454,6 @@ SpriteRepository = new (function() {
 	};
 
 	function createSprites(defs, img) {
-		console.info(defs);
 		for ( var i = 0; i < defs.length; i++) {
 			var current = defs[i]['@atts'];
 			sprites[current.name] = new Sprite(current, img);
@@ -515,6 +508,8 @@ GameObject = Class.extend(new (function() {
 	};
 	this.update = function() {
 	};
+	this.checkCollision = function(objects) {
+	};
 }));
 
 // ------------------------------------MODULES-----------------------------------------
@@ -545,6 +540,8 @@ Module = Class.extend(new (function() {
 	this.init = function() {
 		this.layer = Ph.topLayer;
 		Ph.loadModule(this);
+	};
+	this.checkCollision = function(objects) {
 	};
 	this.execute = function(type) {
 		this[type]();
@@ -606,13 +603,14 @@ Ph = new (function() {
 		$mouse : mouse
 	};
 
-	function updateObject(obj) {
+	function updateObject(obj, otherObjects) {
 		var paramNames = obj.update.params();
 		var params = [];
 		for ( var idx = 0; idx < paramNames.length; idx++) {
 			params.push(updateParameters[paramNames[idx]]);
 		}
 		obj.update.apply(obj, params);
+		obj.checkCollision(otherObjects);
 	}
 
 	function drawObject(obj) {
@@ -624,12 +622,16 @@ Ph = new (function() {
 		ViewPort.clean();
 		for ( var oIndex = 0; oIndex < objects.length; oIndex++) {
 			var currentLayer = objects[oIndex];
-			if (typeof currentLayer != 'undefined')
-				for ( var lIndex = 0; lIndex < currentLayer.length; lIndex++) {
-					var obj = currentLayer[lIndex];
-					updateObject(obj);
+			if (typeof currentLayer != 'undefined') {
+				var tmpLayer = [];
+				while (currentLayer.length > 0) {
+					var obj = currentLayer.shift();
+					updateObject(obj, currentLayer);
+					tmpLayer.push(obj);
 					drawObject(obj);
 				}
+				objects[oIndex] = tmpLayer;
+			}
 		}
 		ViewPort.show();
 		keyword.reset();
@@ -733,7 +735,6 @@ function pharolitoConfigs(url) {
 function loadSprites(urls) {
 	for ( var index = 0; index < urls.length; index++) {
 		var url = urls[index].value;
-		i(ResourceLoader.temporal(url).xml.toJSON());
 		SpriteRepository.load(ResourceLoader.temporal(url).xml.toJSON());
 	}
 };
